@@ -36,4 +36,4 @@ libraries.micrometerRegistryPrometheus = "io.micrometer:micrometer-registry-prom
 libraries.okhttp3 = "com.squareup.okhttp3:okhttp"
 libraries.servletApi = "jakarta.servlet:jakarta.servlet-api"
 libraries.fastjson='com.alibaba:fastjson:1.2.76'
-libraries.rocketmq = 'org.apache.rocketmq:rocketmq-client:4.7.0'
+libraries.rocketmq = 'org.apache.rocketmq:rocketmq-spring-boot-starter:2.1.1'
