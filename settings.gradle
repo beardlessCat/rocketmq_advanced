@@ -1,0 +1,3 @@
+rootProject.name = 'rocketmq_advanced'
+include 'consumer'
+
