@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation libraries.rocketmq
+    implementation libraries.rocketmqClient
     implementation libraries.springBootStarterWeb
 }
 
