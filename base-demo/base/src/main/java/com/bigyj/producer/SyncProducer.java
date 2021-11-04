@@ -1,18 +1,19 @@
 package com.bigyj.producer;
 
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 
 /**
- * 这种方式主要用在不特别关心发送结果的场景，例如日志发送。
+ * 这种可靠性同步地发送方式使用的比较广泛，比如：重要的消息通知，短信通知。
  */
-public class OnewayProducer {
-    public static void main(String[] args) throws Exception{
+public class SyncProducer {
+    public static void main(String[] args) throws Exception {
         // 实例化消息生产者Producer
-        DefaultMQProducer producer = new DefaultMQProducer("OnewayProducer_group");
+        DefaultMQProducer producer = new DefaultMQProducer("SyncProducer_group");
         // 设置NameServer的地址
-        producer.setNamesrvAddr("localhost:9876");
+        producer.setNamesrvAddr("demo.rocket.net:9876");
         // 启动Producer实例
         producer.start();
         for (int i = 0; i < 100; i++) {
@@ -21,9 +22,10 @@ public class OnewayProducer {
                     "TagA",
                     ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET)
             );
-            // 发送单向消息，没有任何返回结果
-            producer.sendOneway(msg);
-
+            // 发送消息到一个Broker
+            SendResult sendResult = producer.send(msg);
+            // 通过sendResult返回消息是否成功送达
+            System.out.printf("%s%n", sendResult);
         }
         // 如果不再发送消息，关闭Producer实例。
         producer.shutdown();

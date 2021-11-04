@@ -1,4 +1,4 @@
 rootProject.name = 'base-demo'
-include 'producer'
-include 'consumer'
+include 'base'
+include 'order'
 
