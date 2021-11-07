@@ -2,4 +2,5 @@ rootProject.name = 'base-demo'
 include 'base'
 include 'order'
 include 'delay'
+include 'transaction'
 
