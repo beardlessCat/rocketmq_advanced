@@ -21,7 +21,7 @@ gradle-app.setting
 *.ipr
 /out/
 rebel.xml
-
+*.class
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
