@@ -1,4 +1,0 @@
-rootProject.name = 'action-scheme'
-include 'rocketmq-producer'
-include 'rocketmq-consumer'
-

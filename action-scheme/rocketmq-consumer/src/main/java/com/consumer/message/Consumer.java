@@ -11,6 +11,6 @@ public class Consumer implements RocketMQListener<String> {
 
     @Override
     public void onMessage(String message) {
-        logger.info("Receive message："+message);
+        log.info("Receive message："+message);
     }
 }
