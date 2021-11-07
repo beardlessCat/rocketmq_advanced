@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+}
+
+group 'com.bigyj'
+version '1.0.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation libraries.rocketmqStarter
+    implementation libraries.springBootStarterWeb
+    implementation libraries.testStarter
+
+
+}
+
+test {
+    useJUnitPlatform()
+}
