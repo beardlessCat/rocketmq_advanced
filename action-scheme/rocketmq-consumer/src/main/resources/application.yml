@@ -1,4 +1,0 @@
-rocketmq:
-  name-server: demo.rocket.net:9876
-  producer:
-    group: action-scheme

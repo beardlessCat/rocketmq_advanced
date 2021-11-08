@@ -12,8 +12,14 @@
     <artifactId>action-scheme</artifactId>
     <packaging>pom</packaging>
     <modules>
-        <module>rocketmq-consumer</module>
-        <module>rocketmq-producer</module>
+        <module>action-api</module>
+        <module>action-common</module>
+        <module>action-pojo</module>
+        <module>action-coupon-service</module>
+        <module>action-goods-service</module>
+        <module>action-order-service</module>
+        <module>action-user-service</module>
+        <module>action-pay-service</module>
     </modules>
 
     <properties>
@@ -42,5 +48,6 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
     </dependencies>
 </project>
