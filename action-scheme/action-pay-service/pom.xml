@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>shop-pay-service</artifactId>
+    <artifactId>action-pay-service</artifactId>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
