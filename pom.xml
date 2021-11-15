@@ -15,6 +15,7 @@
     <modules>
         <module>base-demo</module>
         <module>action-scheme</module>
+        <module>not-lost-message</module>
     </modules>
 
     <properties>

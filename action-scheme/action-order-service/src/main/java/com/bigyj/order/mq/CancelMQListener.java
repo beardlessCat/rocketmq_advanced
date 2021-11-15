@@ -1,10 +1,10 @@
 package com.bigyj.order.mq;
 
 import com.alibaba.fastjson.JSON;
-import com.itheima.constant.ShopCode;
-import com.itheima.entity.MQEntity;
-import com.itheima.shop.mapper.TradeOrderMapper;
-import com.itheima.shop.pojo.TradeOrder;
+import com.bigyj.entity.MQEntity;
+import com.bigyj.order.mapper.TradeOrderMapper;
+import com.bigyj.pojo.TradeOrder;
+import com.bogyj.common.constant.ShopCode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.spring.annotation.MessageModel;
