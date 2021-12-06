@@ -45,6 +45,7 @@ public class CouponServer {
     public void rollBack(Order order) {
         String couponId = order.getCouponId();
         userCoupon.add(couponId);
+        log.info("优惠券回退成功！");
     }
 
     /**

@@ -35,6 +35,7 @@ public class GoodsServer {
      */
     public void rollBack(Order order) {
         total = total+order.getNum();
+        log.info("商品库存回退成功");
     }
 
     /**

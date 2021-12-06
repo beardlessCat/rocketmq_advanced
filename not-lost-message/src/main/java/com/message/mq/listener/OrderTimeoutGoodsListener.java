@@ -22,7 +22,7 @@ public class OrderTimeoutGoodsListener implements RocketMQListener<MessageExt> {
     @Override
     public void onMessage(MessageExt messageExt) {
         String msgId = messageExt.getMsgId();
-        log.info("收到订单取消消息{}",msgId);
+        log.info("收到订单延时取消消息{}",msgId);
         String body = new String(messageExt.getBody(), "UTF-8");
         Order order = JSON.parseObject(body, Order.class);
         goodsServer.orderDelay(order);
