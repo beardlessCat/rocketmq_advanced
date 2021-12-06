@@ -1,0 +1,21 @@
+server:
+  port: 8888
+mq:
+  order:
+    topic:
+      cancel: ORDER_CANCEL_TOPIC
+      success: PAY_SUCCESS_TOPIC
+      delay: DELAY_TOPIC
+    consumer:
+      group:
+        coupon: coupon_group
+        goods: goods_group
+        notice: notice_group
+        point: point_group
+        delay:
+          goods: delay_good_group
+          coupon: delay_coupon_group
+rocketmq:
+  name-server: 10.1.60.210:9876
+  producer:
+    group: my-group
