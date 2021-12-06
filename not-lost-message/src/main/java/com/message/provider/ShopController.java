@@ -46,15 +46,16 @@ public class ShopController {
             //int x = 1/0 ;
             //4.生成订单
             order = orderServer.creatOrder(order);
+            //5.订单生成成功
+
+            //6.发送延时消息
+            messageServer.sendOrderDelayMessage(order);
         } catch (Exception e) {
             log.error("订单：{}生成失败，发送取消消息",order.getId());
             //生成订单失败，发送回退消息，库存服务及优惠券服务进行回退
             messageServer.sendOrderCancelMessage(order);
         }
-        //5.订单生成成功
 
-        //6.发送延时消息
-        messageServer.sendOrderDelayMessage(order);
         return order;
     }
 
@@ -70,8 +71,6 @@ public class ShopController {
                 payServer.payOrder(order);
                 //2.订单成功发送消息
                 messageServer.sendOrderPaySuccessMessage(order);
-                //3.删除延时队列消息
-
             }
         }catch (Exception e){
             //支付失败
