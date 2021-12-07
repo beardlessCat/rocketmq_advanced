@@ -10,8 +10,9 @@ import org.springframework.stereotype.Service;
 public class PayServer {
     @Autowired
     private OrderServer orderServer ;
-    public void payOrder(Order order) {
+    public boolean payOrder(Order order) {
       log.info("订单{}支付成功",order.getId());
-      orderServer.orderPayedSuccess(order.getId());
+        boolean payFlag = orderServer.orderPayedSuccess(order.getId());
+        return payFlag;
     }
 }

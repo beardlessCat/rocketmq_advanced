@@ -50,7 +50,11 @@ public class OrderServer {
      * 订单支付成功
      * @param id
      */
-    public void orderPayedSuccess(String id) {
-        orders.get(id).setOrderStatus(2);
+    public boolean orderPayedSuccess(String id) {
+        Order order = orders.get(id).setOrderStatus(2);
+        if(order.getOrderStatus() == 2){
+            return true ;
+        }
+        return false;
     }
 }

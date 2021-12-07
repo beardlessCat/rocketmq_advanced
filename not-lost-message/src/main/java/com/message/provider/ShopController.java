@@ -71,7 +71,7 @@ public class ShopController {
                 //1.支付订单
                 payServer.payOrder(order);
                 //2.订单成功发送消息
-                messageServer.sendOrderPaySuccessMessage(order);
+                messageServer.sendOrderPaySuccessTransMessage(order);
             }
         }catch (Exception e){
             //支付失败
