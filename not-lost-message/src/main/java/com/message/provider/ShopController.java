@@ -50,6 +50,7 @@ public class ShopController {
 
             //6.发送延时消息
             messageServer.sendOrderDelayMessage(order);
+            log.info("{}订单确认成功",order.getId());
         } catch (Exception e) {
             log.error("订单：{}生成失败，发送取消消息",order.getId());
             //生成订单失败，发送回退消息，库存服务及优惠券服务进行回退

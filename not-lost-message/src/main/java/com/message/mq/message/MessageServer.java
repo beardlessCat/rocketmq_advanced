@@ -43,7 +43,7 @@ public class MessageServer {
      */
     public void sendOrderDelayMessage(Order order) throws MQBrokerException, RemotingException, InterruptedException, MQClientException {
         Message message = new Message(delayTopic,"",order.getId(),JSON.toJSONString(order).getBytes(StandardCharsets.UTF_8));
-        message.setDelayTimeLevel(3);
+        message.setDelayTimeLevel(4);
         rocketMQTemplate.getProducer().send(message);
     }
 
