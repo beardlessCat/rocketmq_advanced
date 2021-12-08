@@ -149,3 +149,303 @@ RocketMQ的消费者中会注册一个监听器，就是上面小块代码中的
 ## 3.消费消息的零丢失
 
 ** 手动提交offset + 自动故障转移：** 采用RocketMQ的消费者天然就可以保证你处理完消息之后，才会提交消息的offset到broker去。
+# 四、代码示例
+## 1.背景
+模拟用户下单操作，用户下单前进行优惠券及库存扣减后完成订单创建。订单支付完成后进行积分发放及消息通知。
+![订单确认流程](./images/17.png)
+![订单支付流程](./images/18.png)
+## 2.详细流程
+### 2.1 订单确认流程
+![订单确认流程](./images/16.png)
+**（1）下单失败库存、优惠券回滚**
+
+订单创建前已经完成库存及优惠券的扣减，此时订单创建失败需进行库存及优惠券数据的回滚。此时向mq中发送订单创建失败消息，由库存及优惠券消费者监听消息消费，完成库存及优惠券的回滚。
+- 订单确认逻辑
+```java
+private Order confirmOrder() throws MQBrokerException, RemotingException, InterruptedException, MQClientException {
+        Order order = orderServer.initialize();
+        try {
+            //2.库存扣减
+            goodsServer.reduceGood(order);
+            //3.优惠券扣减
+            couponServer.useCoupon(order);
+            //int x = 1/0 ;
+            //4.生成订单
+            order = orderServer.creatOrder(order);
+            //5.订单生成成功
+
+            //6.发送延时消息
+            messageServer.sendOrderDelayMessage(order);
+            log.info("{}订单确认成功",order.getId());
+        } catch (Exception e) {
+            log.error("订单：{}生成失败，发送取消消息",order.getId());
+            //生成订单失败，发送回退消息，库存服务及优惠券服务进行回退
+            messageServer.sendOrderCancelMessage(order);
+        }
+        return order;
+    }
+    /**
+     * 发送订单取消消息
+     * @param order
+     */
+    public void sendOrderCancelMessage(Order order) throws MQBrokerException, RemotingException, InterruptedException, MQClientException {
+        Message message = new Message(cancelTopic,"",order.getId(),JSON.toJSONString(order).getBytes(StandardCharsets.UTF_8));
+        rocketMQTemplate.getProducer().send(message);
+        }
+```
+- 消息监听及优惠券回退
+```java
+@Slf4j
+@Component
+@RocketMQMessageListener(topic = "${mq.order.topic.cancel}",consumerGroup = "${mq.order.consumer.group.coupon}",messageModel = MessageModel.CLUSTERING )
+public class OrderCancelCouponListener implements RocketMQListener<MessageExt> {
+    @Autowired
+    private CouponServer couponServer ;
+    @Override
+    public void onMessage(MessageExt messageExt) {
+        try{
+            //1. 解析消息内容
+            String msgId = messageExt.getMsgId();
+            log.info("收到订单取消消息{}",msgId);
+            String body = new String(messageExt.getBody(), "UTF-8");
+            Order order = JSON.parseObject(body, Order.class);
+            couponServer.rollBack(order);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+- 消息监听及库存回退
+```java
+@Slf4j
+@Component
+@RocketMQMessageListener(topic = "${mq.order.topic.cancel}",consumerGroup = "${mq.order.consumer.group.goods}",messageModel = MessageModel.CLUSTERING )
+public class OrderCancelGoodsListener implements RocketMQListener<MessageExt> {
+    @Autowired
+    private GoodsServer goodsServer ;
+    @Override
+    public void onMessage(MessageExt messageExt) {
+        try {
+            //1. 解析消息内容
+            String msgId = messageExt.getMsgId();
+            log.info("收到订单取消消息{}",msgId);
+            String body = new String(messageExt.getBody(), "UTF-8");
+            Order order = JSON.parseObject(body, Order.class);
+            goodsServer.rollBack(order);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+**（2）订单下单成功发送订单延时消息**
+- 订单确认成功后，发送延时消息，用于处理订单超时未支付过期问题。
+```java
+   //6.发送延时消息
+    messageServer.sendOrderDelayMessage(order);
+
+    /**
+     * 发送订单创建成功延时消息
+     * @param order
+     */
+    public void sendOrderDelayMessage(Order order) throws MQBrokerException, RemotingException, InterruptedException, MQClientException {
+        Message message = new Message(delayTopic,"",order.getId(),JSON.toJSONString(order).getBytes(StandardCharsets.UTF_8));
+        message.setDelayTimeLevel(10);
+        rocketMQTemplate.getProducer().send(message);
+        }
+```
+- 延时消息监听-处理优惠券
+```java
+    @Slf4j
+    @Component
+    @RocketMQMessageListener(topic = "${mq.order.topic.delay}",consumerGroup = "${mq.order.consumer.group.delay.coupon}",messageModel = MessageModel.CLUSTERING )
+    public class OrderTimeoutCouponListener implements RocketMQListener<MessageExt> {
+        @Autowired
+        private CouponServer couponServer ;
+        @SneakyThrows
+        @Override
+        public void onMessage(MessageExt messageExt) {
+            String msgId = messageExt.getMsgId();
+            log.info("收到订单延时取消消息{}",msgId);
+            String body = new String(messageExt.getBody(), "UTF-8");
+            Order order = JSON.parseObject(body, Order.class);
+            couponServer.delayOrder(order);
+        }
+    }
+    //判断订单是否已经处理
+    public void delayOrder(Order order) {
+        Order orderInfo = orderServer.getOrder(order.getId());
+        if(orderInfo.getOrderStatus()!=2){
+            this.rollBack(order);
+        }else {
+            log.info("订单{}已成功完成支付",orderInfo.getId());
+        }
+    }
+```
+- 延时消息监听-处理库存
+```java
+    @Component
+    @Slf4j
+    @RocketMQMessageListener(topic = "${mq.order.topic.delay}",consumerGroup = "${mq.order.consumer.group.delay.goods}",messageModel = MessageModel.CLUSTERING )
+    public class OrderTimeoutGoodsListener implements RocketMQListener<MessageExt> {
+        @Autowired
+        private GoodsServer goodsServer;
+        @SneakyThrows
+        @Override
+        public void onMessage(MessageExt messageExt) {
+            String msgId = messageExt.getMsgId();
+            log.info("收到订单延时取消消息{}",msgId);
+            String body = new String(messageExt.getBody(), "UTF-8");
+            Order order = JSON.parseObject(body, Order.class);
+            goodsServer.orderDelay(order);
+        }
+    }
+    /**
+     *
+     * @param order
+     */
+    public void orderDelay(Order order) {
+        Order orderInfo = orderServer.getOrder(order.getId());
+        if(orderInfo.getOrderStatus()!=2){
+            this.rollBack(order);
+        }else {
+            log.info("订单{}已成功完成支付",orderInfo.getId());
+        }
+    }
+```
+### 2.2 订单支付流程
+订单支付引入了rocketMq的事务消息，用于确保消息能够投递到mq中。
+![订单确认流程](./images/19.png)
+- half消息发送
+```java
+    @PostMapping("/payOrder")
+    private void payOrder(String orderId) {
+        Order order = orderServer.getOrder(orderId);
+        try {
+            if(order!=null){
+                //1.支付订单
+                payServer.payOrder(order);
+                //2.订单成功发送消息
+                messageServer.sendOrderPaySuccessTransMessage(order);
+            }
+        }catch (Exception e){
+            //支付失败
+        }
+    }
+    /**
+     * 发送订单支付成功消息
+     * @param order
+     */
+    public boolean sendOrderPaySuccessTransMessage(Order order) throws MQClientException {
+        Message message = new Message(successTopic,"",order.getId(),JSON.toJSONString(order).getBytes(StandardCharsets.UTF_8));
+        TransactionSendResult sendResult = rocketMQTemplate.getProducer().sendMessageInTransaction(message, "orderPayMessage");
+        String sendStatus = sendResult.getSendStatus().name();
+        String localTXState = sendResult.getLocalTransactionState().name();
+        log.info(" send status={},localTransactionState={} ",sendStatus,localTXState);
+        return Boolean.TRUE;
+        }
+```
+- 事务消息回查及本地事务执行
+```java
+@Slf4j
+@Component
+@RocketMQTransactionListener
+public class OrderTXMsgListener implements RocketMQLocalTransactionListener {
+    private PayServer payServer ;
+    private OrderServer orderServer ;
+    @Autowired
+    public OrderTXMsgListener(PayServer payServer, OrderServer orderServer) {
+        this.payServer = payServer;
+        this.orderServer = orderServer;
+    }
+
+    // 执行本地事务
+    @Override
+    public RocketMQLocalTransactionState executeLocalTransaction(Message message, Object arg) {
+        log.info(" TX message listener execute local transaction, message={},args={} ",message,arg);
+        // 执行本地事务
+        RocketMQLocalTransactionState result = RocketMQLocalTransactionState.COMMIT;
+        try {
+            String jsonString = new String((byte[]) message.getPayload());
+            Order order = JSON.parseObject(jsonString, Order.class);
+            //执行交费代码
+            boolean paySuccess = payServer.payOrder(order);
+            if(!paySuccess){
+                result = RocketMQLocalTransactionState.UNKNOWN;
+            }
+        } catch (Exception e) {
+            log.error(" exception message={} ",e.getMessage());
+            result = RocketMQLocalTransactionState.UNKNOWN;
+        }
+        return result;
+    }
+    // 检查本地事务
+    @Override
+    public RocketMQLocalTransactionState checkLocalTransaction(Message message) {
+        log.info(" TX message listener check local transaction, message={} ",message.getPayload());
+        RocketMQLocalTransactionState result = RocketMQLocalTransactionState.COMMIT;
+        try {
+          //检查本地事务
+            String jsonString = new String((byte[]) message.getPayload());
+            Order order = JSON.parseObject(jsonString, Order.class);
+            Order orderInfo = orderServer.getOrder(order.getId());
+            if(orderInfo == null ||orderInfo.getOrderStatus() != 2){
+                result = RocketMQLocalTransactionState.ROLLBACK;
+            }
+        } catch (Exception e) {
+            // 异常就回滚
+            log.error(" exception message={} ",e.getMessage());
+            result = RocketMQLocalTransactionState.ROLLBACK;
+        }
+        return result;
+    }
+}
+```
+- 消息消费-支付通知
+```java
+@Slf4j
+@Component
+@RocketMQMessageListener(topic = "${mq.order.topic.success}",consumerGroup = "${mq.order.consumer.group.notice}",messageModel = MessageModel.CLUSTERING )
+public class PaySuccessNoticeListener implements RocketMQListener<MessageExt> {
+    @Autowired
+    private NoticeServer noticeServer ;
+    @SneakyThrows
+    @Override
+    public void onMessage(MessageExt messageExt) {
+        String msgId = messageExt.getMsgId();
+        log.info("收到订单支付成功消息{}",msgId);
+        String body = new String(messageExt.getBody(), "UTF-8");
+        Order order = JSON.parseObject(body, Order.class);
+        noticeServer.sendNotice(order);
+    }
+}
+```
+- 消息消费-积分发放
+```java
+@Slf4j
+@Component
+@RocketMQMessageListener(topic = "${mq.order.topic.success}",consumerGroup = "${mq.order.consumer.group.point}",messageModel = MessageModel.CLUSTERING )
+public class PaySuccessPointListener implements RocketMQListener<MessageExt> {
+    AtomicInteger atomicInteger = new AtomicInteger(0);
+    @Autowired
+    private PointServer pointServer ;
+    @SneakyThrows
+    @Override
+    public void onMessage(MessageExt messageExt) {
+        String msgId = messageExt.getMsgId();
+        log.info("收到订单支付成功消息{}",msgId);
+        String body = new String(messageExt.getBody(), "UTF-8");
+        Order order = JSON.parseObject(body, Order.class);
+        try {
+            log.info("积分消费者消费消息!");
+
+            //int x = 1/atomicInteger.getAndIncrement()-1 ; 异常处理
+            pointServer.distribute(order);
+        }catch (Exception e){
+            //抛出异常后，MQClient会返回ConsumeConcurrentlyStatus.RECONSUME_LATER进行重试，
+            throw e;
+        }
+    }
+}
+```
