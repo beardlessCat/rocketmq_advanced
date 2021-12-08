@@ -449,3 +449,150 @@ public class PaySuccessPointListener implements RocketMQListener<MessageExt> {
     }
 }
 ```
+## 3.执行结果校验
+### 3.1增加线程池
+增加定时任务线程池，打印当前库存及优惠券。
+```java
+@Component
+public class ApplicationRunnerImpl implements ApplicationRunner {
+    @Autowired
+    private CouponServer couponServer ;
+    @Autowired
+    private GoodsServer goodsServer ;
+    private final ScheduledExecutorService scheduledExecutorService
+            = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl("OrderScheduledThread"));
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                couponServer.couponCount();
+                goodsServer.goodsCount();
+            }
+        }, 20, 20, TimeUnit.SECONDS);
+    }
+}
+
+public class ThreadFactoryImpl implements ThreadFactory {
+    private final AtomicLong threadIndex = new AtomicLong(0);
+    private final String threadNamePrefix;
+    private final boolean daemon;
+
+    public ThreadFactoryImpl(String threadNamePrefix) {
+        this(threadNamePrefix,false);
+    }
+
+    public ThreadFactoryImpl(String threadNamePrefix, boolean daemon) {
+        this.threadNamePrefix = threadNamePrefix;
+        this.daemon = daemon;
+    }
+    @Override
+    public Thread newThread(Runnable r) {
+        Thread thread = new Thread(r, threadNamePrefix + "["+this.threadIndex.incrementAndGet()+"]");
+        thread.setDaemon(daemon);
+        return thread;
+    }
+}
+```
+## 3.2 订单确认
+- 库存及优惠券回退(创建定点订单时异常)
+```vertica
+OrderScheduledThread[1]当前剩余优惠券数量为：3，优惠券列表：[1, 2, 3]                              
+OrderScheduledThread[1]当前库存为：100                                                 
+库存扣减完成！                                                                          
+优惠券扣减完成！                                                                         
+OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]                                 
+OrderScheduledThread[1]当前库存为：95                                                  
+订单：019c20b6f87640d58bf2b3d9ef61c08d生成失败，发送取消消息                                   
+收到订单取消消息0A017084416857FA26B727A7E65C0000                                         
+收到订单取消消息0A017084416857FA26B727A7E65C0000                                         
+商品库存回退成功                                                                         
+优惠券回退成功！                                                                         
+OrderScheduledThread[1]当前剩余优惠券数量为：3，优惠券列表：[2, 3, 1]                              
+OrderScheduledThread[1]当前库存为：100                                                 
+```
+- 延时消息库存订单取消（订单超时）
+```vertica
+2021-12-08 16:52:06.729  INFO 20320 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：3，优惠券列表：[1, 2, 3]
+2021-12-08 16:52:06.729  INFO 20320 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：100
+2021-12-08 16:52:22.744  INFO 20320 --- [nio-8888-exec-4] com.message.server.GoodsServer           : 库存扣减完成！
+2021-12-08 16:52:22.744  INFO 20320 --- [nio-8888-exec-4] com.message.server.CouponServer          : 优惠券扣减完成！
+2021-12-08 16:52:22.999  INFO 20320 --- [nio-8888-exec-4] com.message.provider.ShopController      : 1e1a4bd8aae947e7a6192485ba2b88d7订单确认成功
+2021-12-08 16:52:26.736  INFO 20320 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 16:52:26.737  INFO 20320 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 16:52:46.724  INFO 20320 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 16:52:46.724  INFO 20320 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 16:53:06.727  INFO 20320 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 16:53:06.727  INFO 20320 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 16:53:23.009  INFO 20320 --- [MessageThread_1] c.m.m.l.OrderTimeoutGoodsListener        : 收到订单延时取消消息0A0170844F6057FA26B727AB60D10000，取消订单
+2021-12-08 16:53:23.009  INFO 20320 --- [MessageThread_1] c.m.m.l.OrderTimeoutCouponListener       : 收到订单延时取消消息0A0170844F6057FA26B727AB60D10000，取消订单
+2021-12-08 16:53:23.014  INFO 20320 --- [MessageThread_1] com.message.server.CouponServer          : 优惠券回退成功！
+2021-12-08 16:53:23.014  INFO 20320 --- [MessageThread_1] com.message.server.GoodsServer           : 商品库存回退成功
+2021-12-08 16:53:26.724  INFO 20320 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：3，优惠券列表：[2, 3, 1]
+2021-12-08 16:53:26.724  INFO 20320 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：100
+```
+- 事务消息正常处理（无异常）
+```vertica
+2021-12-08 17:00:06.148  INFO 20320 --- [nio-8888-exec-8] com.message.server.PayServer             : 订单1c6c9f90210b4ff8a353b9cedf226701支付成功
+2021-12-08 17:00:06.162  INFO 20320 --- [nio-8888-exec-8] c.m.mq.listener.OrderTXMsgListener       :  TX message listener execute local transaction, message=GenericMessage [payload=byte[116], headers={rocketmq_KEYS=1c6c9f90210b4ff8a353b9cedf226701, rocketmq_TOPIC=PAY_SUCCESS_TOPIC, rocketmq_FLAG=0, id=1316b902-4857-17cb-429a-3a5f63970298, rocketmq_TRANSACTION_ID=0A0170844F6057FA26B727B27284000C, timestamp=1638954006161}],args=orderPayMessage 
+2021-12-08 17:00:06.162  INFO 20320 --- [nio-8888-exec-8] com.message.server.PayServer             : 订单1c6c9f90210b4ff8a353b9cedf226701支付成功
+2021-12-08 17:00:06.164  INFO 20320 --- [nio-8888-exec-8] com.message.mq.message.MessageServer     :  send status=SEND_OK,localTransactionState=COMMIT_MESSAGE 
+2021-12-08 17:00:06.178  INFO 20320 --- [MessageThread_1] c.m.m.listener.PaySuccessNoticeListener  : 收到订单支付成功消息0A0170844F6057FA26B727B27284000C
+2021-12-08 17:00:06.178  INFO 20320 --- [MessageThread_1] c.m.mq.listener.PaySuccessPointListener  : 收到订单支付成功消息0A0170844F6057FA26B727B27284000C
+2021-12-08 17:00:06.178  INFO 20320 --- [MessageThread_1] c.m.mq.listener.PaySuccessPointListener  : 积分消费者消费消息!
+2021-12-08 17:00:06.178  INFO 20320 --- [MessageThread_1] com.message.server.NoticeServer          : 1c6c9f90210b4ff8a353b9cedf226701订单支付成功，发送消息！
+2021-12-08 17:00:06.178  INFO 20320 --- [MessageThread_1] com.message.server.PointServer           : 1c6c9f90210b4ff8a353b9cedf226701订单获得积分
+2021-12-08 17:00:06.734  INFO 20320 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 17:00:06.734  INFO 20320 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+```
+- 本地事务执行失败(执行本地事务时返回RocketMQLocalTransactionState.ROLLBACK状态)
+```vertica
+2021-12-08 17:05:33.692  INFO 19800 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 17:05:33.692  INFO 19800 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 17:05:37.386  INFO 19800 --- [nio-8888-exec-9] com.message.server.PayServer             : 订单501b3682e9c04c9ba765625f0e6212aa支付成功
+2021-12-08 17:05:43.880  INFO 19800 --- [nio-8888-exec-9] c.m.mq.listener.OrderTXMsgListener       :  TX message listener execute local transaction, message=GenericMessage [payload=byte[116], headers={rocketmq_KEYS=501b3682e9c04c9ba765625f0e6212aa, rocketmq_TOPIC=PAY_SUCCESS_TOPIC, rocketmq_FLAG=0, id=3c961c5f-8e8d-54e6-4006-96585d1daa0a, rocketmq_TRANSACTION_ID=0A0170844D5857FA26B727B79687001E, timestamp=1638954343053}],args=orderPayMessage 
+2021-12-08 17:05:46.636  INFO 19800 --- [nio-8888-exec-9] com.message.server.PayServer             : 订单501b3682e9c04c9ba765625f0e6212aa支付成功
+2021-12-08 17:05:49.569 ERROR 19800 --- [nio-8888-exec-9] c.m.mq.listener.OrderTXMsgListener       :  exception message=/ by zero 
+2021-12-08 17:05:53.978  INFO 19800 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 17:05:53.979  INFO 19800 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 17:05:53.981  INFO 19800 --- [nio-8888-exec-9] com.message.mq.message.MessageServer     :  send status=SEND_OK,localTransactionState=ROLLBACK_MESSAGE 
+
+```
+- 本地事务回查（执行本地事务时返回RocketMQLocalTransactionState.UNKNOWN状态及重试）
+```vertica
+2021-12-08 17:20:57.861  INFO 18224 --- [nio-8888-exec-4] com.message.server.PayServer             : 订单388f56beb04e4b9cb5ecf73e7d5c3272支付成功
+2021-12-08 17:20:57.867  INFO 18224 --- [nio-8888-exec-4] c.m.mq.listener.OrderTXMsgListener       :  TX message listener execute local transaction, message=GenericMessage [payload=byte[116], headers={rocketmq_KEYS=388f56beb04e4b9cb5ecf73e7d5c3272, rocketmq_TOPIC=PAY_SUCCESS_TOPIC, rocketmq_FLAG=0, id=1826db7f-4850-1362-c91d-d82c06d88ee8, rocketmq_TRANSACTION_ID=0A017084473057FA26B727C58C050003, timestamp=1638955257866}],args=orderPayMessage 
+2021-12-08 17:20:57.869  INFO 18224 --- [nio-8888-exec-4] com.message.server.PayServer             : 订单388f56beb04e4b9cb5ecf73e7d5c3272支付成功
+2021-12-08 17:20:57.869 ERROR 18224 --- [nio-8888-exec-4] c.m.mq.listener.OrderTXMsgListener       :  exception message=/ by zero 
+2021-12-08 17:20:57.870  INFO 18224 --- [nio-8888-exec-4] com.message.mq.message.MessageServer     :  send status=SEND_OK,localTransactionState=UNKNOW 
+2021-12-08 17:21:12.404  INFO 18224 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 17:21:12.404  INFO 18224 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 17:21:32.409  INFO 18224 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+2021-12-08 17:21:52.412  INFO 18224 --- [eduledThread[1]] com.message.server.GoodsServer           : OrderScheduledThread[1]当前库存为：95
+2021-12-08 17:21:55.949  INFO 18224 --- [pool-3-thread-1] c.m.mq.listener.OrderTXMsgListener       :  TX message listener check local transaction, message=[123, 34, 99, 111, 117, 112, 111, 110, 73, 100, 34, 58, 34, 49, 34, 44, 34, 105, 100, 34, 58, 34, 51, 56, 56, 102, 53, 54, 98, 101, 98, 48, 52, 101, 52, 98, 57, 99, 98, 53, 101, 99, 102, 55, 51, 101, 55, 100, 53, 99, 51, 50, 55, 50, 34, 44, 34, 110, 117, 109, 34, 58, 53, 44, 34, 111, 114, 100, 101, 114, 65, 109, 111, 117, 110, 116, 34, 58, 49, 48, 48, 57, 44, 34, 111, 114, 100, 101, 114, 83, 116, 97, 116, 117, 115, 34, 58, 50, 44, 34, 117, 115, 101, 114, 73, 100, 34, 58, 34, 48, 48, 48, 48, 49, 34, 125] 
+2021-12-08 17:21:55.969  INFO 18224 --- [MessageThread_1] c.m.mq.listener.PaySuccessPointListener  : 收到订单支付成功消息0A017084473057FA26B727C58C050003
+2021-12-08 17:21:55.969  INFO 18224 --- [MessageThread_1] c.m.m.listener.PaySuccessNoticeListener  : 收到订单支付成功消息0A017084473057FA26B727C58C050003
+2021-12-08 17:21:55.970  INFO 18224 --- [MessageThread_1] com.message.server.NoticeServer          : 388f56beb04e4b9cb5ecf73e7d5c3272订单支付成功，发送消息！
+2021-12-08 17:21:55.970  INFO 18224 --- [MessageThread_1] c.m.mq.listener.PaySuccessPointListener  : 积分消费者消费消息!
+2021-12-08 17:21:55.970  INFO 18224 --- [MessageThread_1] com.message.server.PointServer           : 388f56beb04e4b9cb5ecf73e7d5c3272订单获得积分
+```
+- 消费者消费重试（抛出异常后，MQClient会返回ConsumeConcurrentlyStatus.RECONSUME_LATER进行重试）
+```vertica
+2021-12-08 17:27:54.536  INFO 20528 --- [nio-8888-exec-3] com.message.server.GoodsServer           : 库存扣减完成！
+2021-12-08 17:27:54.536  INFO 20528 --- [nio-8888-exec-3] com.message.server.CouponServer          : 优惠券扣减完成！
+2021-12-08 17:27:54.783  INFO 20528 --- [nio-8888-exec-3] com.message.provider.ShopController      : 23350f08ca044b1cae2adbf9ff5f37b6订单确认成功
+2021-12-08 17:27:58.313  INFO 20528 --- [nio-8888-exec-5] com.message.server.PayServer             : 订单23350f08ca044b1cae2adbf9ff5f37b6支付成功
+2021-12-08 17:27:58.324  INFO 20528 --- [nio-8888-exec-5] c.m.mq.listener.OrderTXMsgListener       :  TX message listener execute local transaction, message=GenericMessage [payload=byte[116], headers={rocketmq_KEYS=23350f08ca044b1cae2adbf9ff5f37b6, rocketmq_TOPIC=PAY_SUCCESS_TOPIC, rocketmq_FLAG=0, id=a76f8ec7-9a85-d29b-ef04-d92b1785f3bc, rocketmq_TRANSACTION_ID=0A017084503057FA26B727CBF66A0003, timestamp=1638955678324}],args=orderPayMessage 
+2021-12-08 17:27:58.327  INFO 20528 --- [nio-8888-exec-5] com.message.server.PayServer             : 订单23350f08ca044b1cae2adbf9ff5f37b6支付成功
+2021-12-08 17:27:58.328  INFO 20528 --- [nio-8888-exec-5] com.message.mq.message.MessageServer     :  send status=SEND_OK,localTransactionState=COMMIT_MESSAGE 
+2021-12-08 17:27:58.337  INFO 20528 --- [MessageThread_1] c.m.mq.listener.PaySuccessPointListener  : 收到订单支付成功消息0A017084503057FA26B727CBF66A0003
+2021-12-08 17:27:58.337  INFO 20528 --- [MessageThread_1] c.m.m.listener.PaySuccessNoticeListener  : 收到订单支付成功消息0A017084503057FA26B727CBF66A0003
+2021-12-08 17:27:58.337  INFO 20528 --- [MessageThread_1] c.m.mq.listener.PaySuccessPointListener  : 积分消费者消费消息!
+2021-12-08 17:27:58.337  INFO 20528 --- [MessageThread_1] com.message.server.NoticeServer          : 23350f08ca044b1cae2adbf9ff5f37b6订单支付成功，发送消息！
+2021-12-08 17:27:58.340  WARN 20528 --- [MessageThread_1] a.r.s.s.DefaultRocketMQListenerContainer : consume message failed. messageExt:MessageExt [brokerName=broker-a, queueId=3, storeSize=384, queueOffset=4, sysFlag=8, bornTimestamp=1638955678314, bornHost=/10.1.112.132:52289, storeTimestamp=1638955676526, storeHost=/10.1.60.210:10911, msgId=0A013CD200002A9F0000000000093EB3, commitLogOffset=605875, bodyCRC=1470889837, reconsumeTimes=0, preparedTransactionOffset=605484, toString()=Message{topic='PAY_SUCCESS_TOPIC', flag=0, properties={MIN_OFFSET=0, REAL_TOPIC=PAY_SUCCESS_TOPIC, MAX_OFFSET=5, KEYS=23350f08ca044b1cae2adbf9ff5f37b6, TRAN_MSG=true, CONSUME_START_TIME=1638955678336, UNIQ_KEY=0A017084503057FA26B727CBF66A0003, WAIT=true, PGROUP=my-group, REAL_QID=3}, body=[123, 34, 99, 111, 117, 112, 111, 110, 73, 100, 34, 58, 34, 49, 34, 44, 34, 105, 100, 34, 58, 34, 50, 51, 51, 53, 48, 102, 48, 56, 99, 97, 48, 52, 52, 98, 49, 99, 97, 101, 50, 97, 100, 98, 102, 57, 102, 102, 53, 102, 51, 55, 98, 54, 34, 44, 34, 110, 117, 109, 34, 58, 53, 44, 34, 111, 114, 100, 101, 114, 65, 109, 111, 117, 110, 116, 34, 58, 49, 48, 48, 57, 44, 34, 111, 114, 100, 101, 114, 83, 116, 97, 116, 117, 115, 34, 58, 50, 44, 34, 117, 115, 101, 114, 73, 100, 34, 58, 34, 48, 48, 48, 48, 49, 34, 125], transactionId='0A017084503057FA26B727CBF66A0003'}], error:{}
+java.lang.ArithmeticException: / by zero
+2021-12-08 17:28:08.348  INFO 20528 --- [MessageThread_2] c.m.mq.listener.PaySuccessPointListener  : 收到订单支付成功消息0A017084503057FA26B727CBF66A0003
+2021-12-08 17:28:08.348  INFO 20528 --- [MessageThread_2] c.m.mq.listener.PaySuccessPointListener  : 积分消费者消费消息!
+2021-12-08 17:28:08.348  INFO 20528 --- [MessageThread_2] com.message.server.PointServer           : 23350f08ca044b1cae2adbf9ff5f37b6订单获得积分
+2021-12-08 17:28:09.309  INFO 20528 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
+```

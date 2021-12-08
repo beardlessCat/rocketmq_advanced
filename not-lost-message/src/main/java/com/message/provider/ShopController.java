@@ -47,7 +47,6 @@ public class ShopController {
             //4.生成订单
             order = orderServer.creatOrder(order);
             //5.订单生成成功
-
             //6.发送延时消息
             messageServer.sendOrderDelayMessage(order);
             log.info("{}订单确认成功",order.getId());
@@ -79,3 +78,4 @@ public class ShopController {
 
     }
 }
+

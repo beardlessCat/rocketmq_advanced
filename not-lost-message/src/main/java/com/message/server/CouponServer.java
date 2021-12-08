@@ -32,6 +32,7 @@ public class CouponServer {
             String couponId = order.getCouponId();
             if(!StringUtils.isEmpty(couponId)){
                 userCoupon.remove(couponId);
+                log.info("优惠券扣减完成！");
             }
         }finally {
             reentrantLock.unlock();
@@ -57,7 +58,7 @@ public class CouponServer {
 
     public void delayOrder(Order order) {
         Order orderInfo = orderServer.getOrder(order.getId());
-        if(orderInfo.getOrderStatus()!=2){
+        if(orderInfo!=null&&orderInfo.getOrderStatus()!=2){
             this.rollBack(order);
         }else {
             log.info("订单{}已成功完成支付",orderInfo.getId());

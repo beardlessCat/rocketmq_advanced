@@ -36,7 +36,7 @@ public class OrderTXMsgListener implements RocketMQLocalTransactionListener {
             //执行交费代码
             boolean paySuccess = payServer.payOrder(order);
             if(!paySuccess){
-                result = RocketMQLocalTransactionState.UNKNOWN;
+                result = RocketMQLocalTransactionState.ROLLBACK;
             }
         } catch (Exception e) {
             log.error(" exception message={} ",e.getMessage());

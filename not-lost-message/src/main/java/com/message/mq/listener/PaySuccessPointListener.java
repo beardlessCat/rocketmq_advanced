@@ -31,8 +31,7 @@ public class PaySuccessPointListener implements RocketMQListener<MessageExt> {
         Order order = JSON.parseObject(body, Order.class);
         try {
             log.info("积分消费者消费消息!");
-
-            //int x = 1/atomicInteger.getAndIncrement()-1 ; 异常处理
+            int x = 1/atomicInteger.getAndIncrement()-1 ;
             pointServer.distribute(order);
         }catch (Exception e){
             //抛出异常后，MQClient会返回ConsumeConcurrentlyStatus.RECONSUME_LATER进行重试，

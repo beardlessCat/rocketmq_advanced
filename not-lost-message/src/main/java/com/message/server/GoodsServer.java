@@ -23,6 +23,7 @@ public class GoodsServer {
         try {
             if(total>=order.getNum()){
                 total = total-order.getNum();
+                log.info("库存扣减完成！");
             }
         }finally {
             reentrantLock.unlock();
@@ -51,7 +52,7 @@ public class GoodsServer {
      */
     public void orderDelay(Order order) {
         Order orderInfo = orderServer.getOrder(order.getId());
-        if(orderInfo.getOrderStatus()!=2){
+        if(orderInfo!=null && orderInfo.getOrderStatus()!=2){
             this.rollBack(order);
         }else {
             log.info("订单{}已成功完成支付",orderInfo.getId());
