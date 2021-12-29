@@ -1,6 +1,7 @@
 package com.message.mq.message;
 
 import com.alibaba.fastjson.JSON;
+import com.message.entity.ChargeInfo;
 import com.message.entity.Order;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.exception.MQBrokerException;
@@ -24,7 +25,8 @@ public class MessageServer {
     private String successTopic;
     @Value("${mq.order.topic.delay}")
     private String delayTopic;
-
+    @Value("${mq.order.topic.charge}")
+    private String chargeTopic;
     private RocketMQTemplate rocketMQTemplate ;
     @Autowired
     public MessageServer(RocketMQTemplate rocketMQTemplate) {
@@ -61,5 +63,14 @@ public class MessageServer {
         String localTXState = sendResult.getLocalTransactionState().name();
         log.info(" send status={},localTransactionState={} ",sendStatus,localTXState);
         return Boolean.TRUE;
+    }
+
+    /**
+     * 发送充值消息
+     * @param chargeInfo
+     */
+    public void sendCharMessage(ChargeInfo chargeInfo) throws MQBrokerException, RemotingException, InterruptedException, MQClientException {
+        Message message = new Message(chargeTopic,"",chargeInfo.getNo(),JSON.toJSONString(chargeInfo).getBytes(StandardCharsets.UTF_8));
+        rocketMQTemplate.getProducer().send(message);
     }
 }

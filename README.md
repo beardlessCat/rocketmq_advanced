@@ -149,7 +149,7 @@ RocketMQ的消费者中会注册一个监听器，就是上面小块代码中的
 ## 3.消费消息的零丢失
 
 ** 手动提交offset + 自动故障转移：** 采用RocketMQ的消费者天然就可以保证你处理完消息之后，才会提交消息的offset到broker去。
-# 四、代码示例
+# 四、代码示例-可靠消息最终一致性
 ## 1.背景
 模拟用户下单操作，用户下单前进行优惠券及库存扣减后完成订单创建。订单支付完成后进行积分发放及消息通知。
 ![订单确认流程](./images/17.png)
@@ -596,3 +596,13 @@ java.lang.ArithmeticException: / by zero
 2021-12-08 17:28:08.348  INFO 20528 --- [MessageThread_2] com.message.server.PointServer           : 23350f08ca044b1cae2adbf9ff5f37b6订单获得积分
 2021-12-08 17:28:09.309  INFO 20528 --- [eduledThread[1]] com.message.server.CouponServer          : OrderScheduledThread[1]当前剩余优惠券数量为：2，优惠券列表：[2, 3]
 ```
+# 五、代码示例-最大努力通知
+
+## 1.背景
+
+通过用户充值的场景进行实例，分为充值系统和账户系统两个微服务，其中账户系统的数据库是A数据库，其中有张三账户。充值系统的数据库使用B数据库，记录了账户的充值记录。
+
+ ![订单确认流程](./images/20.png)
+
+## 2.详细流程
+

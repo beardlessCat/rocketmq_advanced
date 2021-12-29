@@ -1,10 +1,8 @@
 package com.message.runner;
 
-import com.message.entity.Coupon;
 import com.message.factory.ThreadFactoryImpl;
 import com.message.server.CouponServer;
 import com.message.server.GoodsServer;
-import com.message.server.OrderServer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

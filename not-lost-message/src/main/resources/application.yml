@@ -6,12 +6,14 @@ mq:
       cancel: ORDER_CANCEL_TOPIC
       success: PAY_SUCCESS_TOPIC
       delay: DELAY_TOPIC
+      charge: CHARGE_TOPIC
     consumer:
       group:
         coupon: coupon_group
         goods: goods_group
         notice: notice_group
         point: point_group
+        charge: charge_group
         delay:
           goods: delay_good_group
           coupon: delay_coupon_group
